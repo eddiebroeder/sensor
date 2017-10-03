@@ -156,7 +156,7 @@ sub printLogAndExit() {
 }
 
 sub exitIfRunning() {
-    my @output = `pgrep sensor`;
+    my @output = `pgrep sensord`;
     if (scalar @output > 1) {
         print "sensor is already running, exiting...\n";
         exit -1;
