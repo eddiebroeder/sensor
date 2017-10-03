@@ -6,17 +6,18 @@ $|++;
 use Device::BCM2835;
 use Net::SMTPS;
 use DateTime;
+use Fcntl;
+use POSIX qw(mkfifo);
 
 my $AUTH_FILE = "authFile";
 my $CGI_PIPE = "/tmp/alarm.pipe";
 my $MOTION_THRESHOLD = 3;
 
+&exitIfRunning();
+&ensurePipeExists();
 $SIG{TERM} = \&handleTermSignal;
 
-#TODO: check if already running and don't start if it is
-
-&printLog("Starting sensor");
-
+&printLog("Starting sensor (default state is armed)");
 Device::BCM2835::init() 
  or &printLogAndExit("Could not initialize BCM2835 library");
  
@@ -24,18 +25,31 @@ Device::BCM2835::gpio_fsel(&Device::BCM2835::RPI_GPIO_P1_08,
                             &Device::BCM2835::BCM2835_GPIO_FSEL_INPT);
 
 my %credentials = &getCredentials($AUTH_FILE);
+my $armed = 1;
 my $motionCount = 0;
 while (1)
 {
-    my $motion = Device::BCM2835::gpio_lev(&Device::BCM2835::RPI_GPIO_P1_08);
-    ($motion) ? $motionCount++ : ($motionCount = 0);
-    if ($motionCount > $MOTION_THRESHOLD) {
-        &printLog("MOTION DETECTED!");
-        &handleMotion();
-        &printLog("sleeping 20 seconds");
-        sleep 20;
+    my $action = &readPipe();
+    if ($action eq "arm") {
+        &armSensor;
     }
-    select(undef, undef, undef, 0.20);
+    elsif ($action eq "disarm") {
+        &disarmSensor;
+    }
+    if ($armed) {
+        my $motion = Device::BCM2835::gpio_lev(&Device::BCM2835::RPI_GPIO_P1_08);
+        ($motion) ? $motionCount++ : ($motionCount = 0);
+        if ($motionCount > $MOTION_THRESHOLD) {
+            &printLog("MOTION DETECTED!");
+            &handleMotion();
+            &printLog("sleeping 20 seconds");
+            sleep 20;
+        }
+        select(undef, undef, undef, 0.20);
+    }
+    else {
+        sleep 5;
+    }
 }
 
 
@@ -92,6 +106,42 @@ sub getCredentials() {
     return %credentials;
 }
 
+sub armSensor() {
+    $armed = 1;
+    &printLog("Sensor is armed");
+    &writePipe("armed");
+}
+
+sub disarmSensor() {
+    $armed = 0;
+    &printLog("Sensor is disarmed");
+    &writePipe("disarmed");
+}
+
+sub ensurePipeExists() {
+    if (!-p $CGI_PIPE) {
+        my $return = mkfifo ($CGI_PIPE, "0666"); #FIXME: This mode doesn't work, even though my umask is 0000
+        &printLog("Creating PIPE $CGI_PIPE");
+        chmod (0666, $CGI_PIPE);
+        &printLogAndExit("Couldn't create PIPE, $!") unless $return;
+    }
+}
+
+sub readPipe() {
+    my $output;
+    sysopen (my $FIFO, $CGI_PIPE, O_NONBLOCK|O_RDWR) or &printLog("Couldn't open pipe $CGI_PIPE, $!");
+    my $return = sysread ($FIFO, $output, 6);
+    close ($FIFO) or &printLog("Couldn't close pipe $CGI_PIPE");
+    return $output; #FIXME: Probably should check return, incase of EAGAIN, etc.
+}
+
+sub writePipe() {
+    my $msg = shift;
+    open (my $FIFO, ">", $CGI_PIPE) or &printLog("Couldn't open pipe $CGI_PIPE, $!");
+    print $FIFO $msg;
+    close ($FIFO) or &printLog("Couldn't close pipe $CGI_PIPE");
+}
+
 sub printLog() {
     my $msg = shift;
     my $time = DateTime->now(time_zone => "America/Los_Angeles");
@@ -103,6 +153,14 @@ sub printLogAndExit() {
     &printLog($msg);
     &printLog("Terminating program");
     exit -1;
+}
+
+sub exitIfRunning() {
+    my @output = `pgrep sensor`;
+    if (scalar @output > 1) {
+        print "sensor is already running, exiting...\n";
+        exit -1;
+    }
 }
 
 sub handleTermSignal() {
