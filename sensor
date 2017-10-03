@@ -1,0 +1,112 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+$|++;
+
+use Device::BCM2835;
+use Net::SMTPS;
+use DateTime;
+
+my $AUTH_FILE = "authFile";
+my $CGI_PIPE = "/tmp/alarm.pipe";
+my $MOTION_THRESHOLD = 3;
+
+$SIG{TERM} = \&handleTermSignal;
+
+#TODO: check if already running and don't start if it is
+
+&printLog("Starting sensor");
+
+Device::BCM2835::init() 
+ or &printLogAndExit("Could not initialize BCM2835 library");
+ 
+Device::BCM2835::gpio_fsel(&Device::BCM2835::RPI_GPIO_P1_08, 
+                            &Device::BCM2835::BCM2835_GPIO_FSEL_INPT);
+
+my %credentials = &getCredentials($AUTH_FILE);
+my $motionCount = 0;
+while (1)
+{
+    my $motion = Device::BCM2835::gpio_lev(&Device::BCM2835::RPI_GPIO_P1_08);
+    ($motion) ? $motionCount++ : ($motionCount = 0);
+    if ($motionCount > $MOTION_THRESHOLD) {
+        &printLog("MOTION DETECTED!");
+        &handleMotion();
+        &printLog("sleeping 20 seconds");
+        sleep 20;
+    }
+    select(undef, undef, undef, 0.20);
+}
+
+
+#---< subroutines >------------------------------------------------------------
+
+sub handleMotion() {
+    my $time = DateTime->now(time_zone => "America/Los_Angeles");
+    &printLog("Taking photo");
+    `/usr/bin/raspistill -o /var/www/sensor/photos/$time -rot 270 -q 100 -t 2000`;
+    &sendEmail($time) or &printLog("Couldn't send email");
+    &printLog("recording video");
+    `/home/embroede/sensor/record20SecondClip $time`;
+}
+
+sub sendEmail() {
+    my $time = shift;
+    &printLog("Sending email and text message");
+    my $smtp = Net::SMTP->new(
+        Host        => "smtp.mail.yahoo.com",
+        Port        => 587,
+        Timeout     => 10,
+        doSSL       => "starttls",
+        SSL_version => "TLSv1",
+    ) or &printLog("couldn't create smtp object");
+    $smtp->starttls();
+    $smtp->auth($credentials{user}, $credentials{pass});
+    $smtp->mail($credentials{fromAddress});
+    $smtp->cc($credentials{toAddress});
+    $smtp->to($credentials{toNumber});
+    $smtp->data();
+    $smtp->datasend("\nMotion Detected!\n");
+    $smtp->datasend("Links to current photo/video:\n");
+    $smtp->datasend($credentials{domain} . "/photos/$time\n");
+    $smtp->datasend($credentials{domain} . "/videos/$time.mp4");
+    $smtp->datasend();
+    my $smtpStatus = $smtp->quit();
+    &printLog("SMTP send status (1 doesn't always mean good): $smtpStatus");
+}
+
+sub getCredentials() {
+    my $authFile = shift;
+    my %credentials;
+    open (my $FH, "<", $authFile) or &printLogAndExit("Couldn't open authFile, $!");
+    while (<$FH>) {
+        chomp;
+        $credentials{fromAddress} = (split(/=/,$_))[1] if $_ =~ /^fromAddress/;
+        $credentials{user} = (split(/=/,$_))[1] if $_ =~ /^user/;
+        $credentials{pass} = (split(/=/,$_))[1] if $_ =~ /^password/;
+        $credentials{toAddress} = (split(/=/,$_))[1] if $_ =~ /^toAddress/;
+        $credentials{toNumber} = (split(/=/,$_))[1] if $_ =~ /^toNumber/;
+        $credentials{domain} = (split(/=/,$_))[1] if $_ =~ /^domain/;
+    }
+    close ($FH) or &printLogAndExit("Couldn't close authFile");
+    return %credentials;
+}
+
+sub printLog() {
+    my $msg = shift;
+    my $time = DateTime->now(time_zone => "America/Los_Angeles");
+    print "$time $msg\n";
+}
+
+sub printLogAndExit() {
+    my $msg = shift;
+    &printLog($msg);
+    &printLog("Terminating program");
+    exit -1;
+}
+
+sub handleTermSignal() {
+    &printLog("Caught TERM signal, terminating program");
+    exit 0;
+}
+
