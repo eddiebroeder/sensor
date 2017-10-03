@@ -1,2 +1,2 @@
-/home/embroede/sensor/sensor 2>&1 >> /home/embroede/sensor/log/sensor.log &
+/home/embroede/sensor/sensord 2>&1 >> /home/embroede/sensor/log/sensor.log &
 
