@@ -10,11 +10,12 @@ use Fcntl;
 use POSIX qw(mkfifo);
 
 my $AUTH_FILE = "authFile";
-my $CGI_PIPE = "/tmp/alarm.pipe";
+my $CGI_TO_SENSORD_PIPE = "/tmp/cgi_to_sensord.pipe";
+my $SENSORD_TO_CGI_PIPE = "/tmp/sensord_to_cgi.pipe";
 my $MOTION_THRESHOLD = 3;
 
 &exitIfRunning();
-&ensurePipeExists();
+&ensurePipesExist();
 $SIG{TERM} = \&handleTermSignal;
 
 &printLog("Starting sensor (default state is armed)");
@@ -118,28 +119,34 @@ sub disarmSensor() {
     &writePipe("disarmed");
 }
 
-sub ensurePipeExists() {
-    if (!-p $CGI_PIPE) {
-        my $return = mkfifo ($CGI_PIPE, "0666"); #FIXME: This mode doesn't work, even though my umask is 0000
-        &printLog("Creating PIPE $CGI_PIPE");
-        chmod (0666, $CGI_PIPE);
-        &printLogAndExit("Couldn't create PIPE, $!") unless $return;
+sub ensurePipesExist() {
+    if (!-p $SENSORD_TO_CGI_PIPE) {
+        my $return = mkfifo ($SENSORD_TO_CGI_PIPE, "0666"); #FIXME: This mode doesn't work, even though my umask is 0000
+        &printLog("Creating PIPE $SENSORD_TO_CGI_PIPE");
+        &printLogAndExit("Couldn't create PIPE $SENSORD_TO_CGI_PIPE, $!") unless $return;
+        chmod (0666, $SENSORD_TO_CGI_PIPE);
+    }
+    if (!-p $CGI_TO_SENSORD_PIPE) {
+        my $return = mkfifo ($CGI_TO_SENSORD_PIPE, "0666"); #FIXME: This mode doesn't work, even though my umask is 0000
+        &printLog("Creating PIPE $CGI_TO_SENSORD_PIPE");
+        &printLogAndExit("Couldn't create PIPE $CGI_TO_SENSORD_PIPE, $!") unless $return;
+        chmod (0666, $CGI_TO_SENSORD_PIPE);
     }
 }
 
 sub readPipe() {
     my $output;
-    sysopen (my $FIFO, $CGI_PIPE, O_NONBLOCK|O_RDWR) or &printLog("Couldn't open pipe $CGI_PIPE, $!");
+    sysopen (my $FIFO, $CGI_TO_SENSORD_PIPE, O_NONBLOCK|O_RDONLY) or &printLog("Couldn't open pipe $CGI_TO_SENSORD_PIPE, $!");
     my $return = sysread ($FIFO, $output, 6);
-    close ($FIFO) or &printLog("Couldn't close pipe $CGI_PIPE");
+    close ($FIFO) or &printLog("Couldn't close pipe $CGI_TO_SENSORD_PIPE");
     return $output; #FIXME: Probably should check return, incase of EAGAIN, etc.
 }
 
 sub writePipe() {
     my $msg = shift;
-    open (my $FIFO, ">", $CGI_PIPE) or &printLog("Couldn't open pipe $CGI_PIPE, $!");
+    open (my $FIFO, ">", $SENSORD_TO_CGI_PIPE) or &printLog("Couldn't open pipe $SENSORD_TO_CGI_PIPE, $!");
     print $FIFO $msg;
-    close ($FIFO) or &printLog("Couldn't close pipe $CGI_PIPE");
+    close ($FIFO) or &printLog("Couldn't close pipe $SENSORD_TO_CGI_PIPE");
 }
 
 sub printLog() {
