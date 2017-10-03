@@ -1,0 +1,22 @@
+#!/usr/bin/perl
+
+my @output = `pgrep Check_Network`;
+if (scalar @output > 1) {
+    print "Check_Network is already running, exiting...\n" if $ARGV[0] eq "-d";
+    exit 0;
+}
+
+my $connected = 0;
+my @interfaces = `/sbin/ifconfig`;
+my @interfaces = grep(/inet addr/, @interfaces);
+chomp @interfaces;
+foreach my $interface (@interfaces) {
+    next if $interface =~ /127\.0\.0\.1/;
+    $connected = 1;
+    print "Found a connection!\n" if $ARGV[0] eq "-d";
+}
+if (!$connected) {
+    print "No network connection, restarting networking service\n" if $ARGV[0] eq "-d";
+    `/etc/init.d/networking restart`
+}
+
