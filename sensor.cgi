@@ -41,9 +41,9 @@ else {
 
 sub writePipe() {
     my $msg = shift;
-    open (my $FIFO, ">", $CGI_TO_SENSORD_PIPE) or die "Couldn't open $CGI_TO_SENSORD_PIPE, $!";
-    print $FIFO $msg;
-    close ($FIFO) or die "Couldn't close $CGI_TO_SENSORD_PIPE"; #TODO: make a subroutine to print error and then exit (open and close)
+    sysopen (my $FIFO, $CGI_TO_SENSORD_PIPE, O_NONBLOCK|O_WRONLY) or die "Couldn't open $CGI_TO_SENSORD_PIPE, $!";
+    syswrite ($FIFO, $msg);
+    close ($FIFO) or die "Couldn't close $CGI_TO_SENSORD_PIPE"; #TODO: make a subroutine to print error and exit (open and close)
 }
 
 sub checkSensorProcess() {
