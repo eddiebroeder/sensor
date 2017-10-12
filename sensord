@@ -9,22 +9,19 @@ use DateTime;
 use Fcntl;
 use POSIX qw(mkfifo);
 
-my $AUTH_FILE = "authFile";
+my $AUTH_FILE = "/home/embroede/sensor/authFile";
 my $CGI_TO_SENSORD_PIPE = "/tmp/cgi_to_sensord.pipe";
 my $SENSORD_TO_CGI_PIPE = "/tmp/sensord_to_cgi.pipe";
 my $MOTION_THRESHOLD = 3;
+my $CGI_TO_SENSORD_FH;
 
 &exitIfRunning();
 &ensurePipesExist();
+&initializeIO();
 $SIG{TERM} = \&handleTermSignal;
 
-&printLog("Starting sensor (default state is armed)");
-Device::BCM2835::init() 
- or &printLogAndExit("Could not initialize BCM2835 library");
+&printLog("Starting sensor (armed)");
  
-Device::BCM2835::gpio_fsel(&Device::BCM2835::RPI_GPIO_P1_08, 
-                            &Device::BCM2835::BCM2835_GPIO_FSEL_INPT);
-
 my %credentials = &getCredentials($AUTH_FILE);
 my $armed = 1;
 my $motionCount = 0;
@@ -55,6 +52,17 @@ while (1)
 
 
 #---< subroutines >------------------------------------------------------------
+
+sub initializeIO() {
+    Device::BCM2835::init() or &printLogAndExit("Could not initialize BCM2835 library");
+    Device::BCM2835::gpio_fsel(&Device::BCM2835::RPI_GPIO_P1_08, &Device::BCM2835::BCM2835_GPIO_FSEL_INPT);
+    sysopen ($CGI_TO_SENSORD_FH, $CGI_TO_SENSORD_PIPE, O_NONBLOCK|O_RDONLY) or &printLog("Couldn't open pipe $CGI_TO_SENSORD_PIPE, $!");
+}
+
+sub cleanupIO() {
+    #TODO: cleanup gpio pins
+    close ($CGI_TO_SENSORD_FH) or &printLog("Couldn't close pipe $CGI_TO_SENSORD_PIPE");
+}
 
 sub handleMotion() {
     my $time = DateTime->now(time_zone => "America/Los_Angeles");
@@ -108,25 +116,35 @@ sub getCredentials() {
 }
 
 sub armSensor() {
-    $armed = 1;
-    &printLog("Sensor is armed");
-    &writePipe("armed");
+    if ($armed) {
+        &printLog("Received arm signal (already armed)");
+    }
+    else {
+        $armed = 1;
+        &printLog("Received arm signal, sensor is now armed");
+    }
+    #&writePipe("armed"); #FIXME: This sometimes kills it with -1 EPIPE (Broken pipe) XXX
 }
 
 sub disarmSensor() {
-    $armed = 0;
-    &printLog("Sensor is disarmed");
-    &writePipe("disarmed");
+    if ($armed) {
+        $armed = 0;
+        &printLog("Received disarm signal, sensor is now disarmed");
+    }
+    else {
+        &printLog("Received disarm signal (already disarmed)");
+    }
+    #&writePipe("disarmed"); #FIXME: This sometimes kills it with -1 EPIPE (Broken pipe) XXX
 }
 
 sub ensurePipesExist() {
-    if (!-p $SENSORD_TO_CGI_PIPE) {
+    unless (-p $SENSORD_TO_CGI_PIPE) {
         my $return = mkfifo ($SENSORD_TO_CGI_PIPE, "0666"); #FIXME: This mode doesn't work, even though my umask is 0000
         &printLog("Creating PIPE $SENSORD_TO_CGI_PIPE");
         &printLogAndExit("Couldn't create PIPE $SENSORD_TO_CGI_PIPE, $!") unless $return;
         chmod (0666, $SENSORD_TO_CGI_PIPE);
     }
-    if (!-p $CGI_TO_SENSORD_PIPE) {
+    unless (-p $CGI_TO_SENSORD_PIPE) {
         my $return = mkfifo ($CGI_TO_SENSORD_PIPE, "0666"); #FIXME: This mode doesn't work, even though my umask is 0000
         &printLog("Creating PIPE $CGI_TO_SENSORD_PIPE");
         &printLogAndExit("Couldn't create PIPE $CGI_TO_SENSORD_PIPE, $!") unless $return;
@@ -136,10 +154,8 @@ sub ensurePipesExist() {
 
 sub readPipe() {
     my $output;
-    sysopen (my $FIFO, $CGI_TO_SENSORD_PIPE, O_NONBLOCK|O_RDONLY) or &printLog("Couldn't open pipe $CGI_TO_SENSORD_PIPE, $!");
-    my $return = sysread ($FIFO, $output, 6);
-    close ($FIFO) or &printLog("Couldn't close pipe $CGI_TO_SENSORD_PIPE");
-    return $output; #FIXME: Probably should check return, incase of EAGAIN, etc.
+    my $return = sysread ($CGI_TO_SENSORD_FH, $output, 6); #TODO: CHECK RETURN
+    return $output;
 }
 
 sub writePipe() {
@@ -172,6 +188,7 @@ sub exitIfRunning() {
 
 sub handleTermSignal() {
     &printLog("Caught TERM signal, terminating program");
+    &cleanupIO();
     exit 0;
 }
 
