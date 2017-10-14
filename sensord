@@ -29,10 +29,13 @@ while (1)
 {
     my $action = &readPipe();
     if ($action eq "arm") {
-        &armSensor;
+        &armSensor();
     }
     elsif ($action eq "disarm") {
-        &disarmSensor;
+        &disarmSensor();
+    }
+    elsif ($action eq "status") {
+        &writeStatus();
     }
     if ($armed) {
         my $motion = Device::BCM2835::gpio_lev(&Device::BCM2835::RPI_GPIO_P1_08);
@@ -49,7 +52,6 @@ while (1)
         sleep 5;
     }
 }
-
 
 #---< subroutines >------------------------------------------------------------
 
@@ -116,6 +118,7 @@ sub getCredentials() {
 }
 
 sub armSensor() {
+    &writePipe("armed");
     if ($armed) {
         &printLog("Received arm signal (already armed)");
     }
@@ -123,10 +126,10 @@ sub armSensor() {
         $armed = 1;
         &printLog("Received arm signal, sensor is now armed");
     }
-    #&writePipe("armed"); #FIXME: This sometimes kills it with -1 EPIPE (Broken pipe) XXX
 }
 
 sub disarmSensor() {
+    &writePipe("disarmed");
     if ($armed) {
         $armed = 0;
         &printLog("Received disarm signal, sensor is now disarmed");
@@ -134,7 +137,11 @@ sub disarmSensor() {
     else {
         &printLog("Received disarm signal (already disarmed)");
     }
-    #&writePipe("disarmed"); #FIXME: This sometimes kills it with -1 EPIPE (Broken pipe) XXX
+}
+
+sub writeStatus() {
+        ($armed) ? &writePipe("armed") : &writePipe("disarmed");
+        &printLog("Received status query, writing status to pipe");
 }
 
 sub ensurePipesExist() {
@@ -160,9 +167,8 @@ sub readPipe() {
 
 sub writePipe() {
     my $msg = shift;
-    open (my $FIFO, ">", $SENSORD_TO_CGI_PIPE) or &printLog("Couldn't open pipe $SENSORD_TO_CGI_PIPE, $!");
-    print $FIFO $msg;
-    close ($FIFO) or &printLog("Couldn't close pipe $SENSORD_TO_CGI_PIPE");
+    system("echo $msg > $SENSORD_TO_CGI_PIPE &"); # Not ideal; works for now
+    return;
 }
 
 sub printLog() {
@@ -181,7 +187,7 @@ sub printLogAndExit() {
 sub exitIfRunning() {
     my @output = `pgrep sensord`;
     if (scalar @output > 1) {
-        print "sensor is already running, exiting...\n";
+        print "sensord is already running, exiting...\n";
         exit -1;
     }
 }

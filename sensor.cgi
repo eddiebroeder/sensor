@@ -18,19 +18,15 @@ if ('POST' eq $cgi->request_method && $cgi->param('action')) {
     }
     if ($cgi->param('action') eq "arm") {
         &writePipe("arm");
-        #print &checkSensorStatus();
-        print &checkSensorProcess();
+        print &checkSensorStatus();
     }
     elsif ($cgi->param('action') eq "disarm") {
         &writePipe("disarm");
-        #print &checkSensorStatus();
-        print &checkSensorProcess();
+        print &checkSensorStatus();
     }
     elsif ($cgi->param('action') eq "status") {
-        print &checkSensorProcess();
-    }
-    else {
-        print "ERROR: wrong parameter value";
+        &writePipe("status");
+        print &checkSensorStatus();
     }
 }
 else {
@@ -53,16 +49,15 @@ sub checkSensorProcess() {
 
 sub checkSensorStatus() {
     return "down" if (&checkSensorProcess eq "down");
-    sleep 3; #XXX This is stupid to assume a certain duration
     my $output;
-    sysopen (my $FIFO, $SENSORD_TO_CGI_PIPE, O_NONBLOCK|O_RDONLY) or die "Couldn't open pipe $SENSORD_TO_CGI_PIPE, $!";
-    my $return = sysread ($FIFO, $output, 6); 
+    sysopen (my $FIFO, $SENSORD_TO_CGI_PIPE, O_RDONLY) or die "Couldn't open pipe $SENSORD_TO_CGI_PIPE, $!";
+    my $return = sysread ($FIFO, $output, 12); 
     close ($FIFO) or die "Couldn't close pipe $SENSORD_TO_CGI_PIPE";
     #FIXME: Probably should check return, incase of EAGAIN, etc.
-    if ($output eq "armed" || $output eq "disarmed") {
-        print $output;
+    if ($output =~ "armed") {
+        return $output;
     }
     else {
-        print "ERROR: sensor status is unknown";
+        return "ERROR: sensor status is unknown";
     }
 }
