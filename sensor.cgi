@@ -8,25 +8,41 @@ use Fcntl;
 
 my $CGI_TO_SENSORD_PIPE = "/tmp/cgi_to_sensord.pipe";
 my $SENSORD_TO_CGI_PIPE = "/tmp/sensord_to_cgi.pipe";
+my $PHOTO_DIR = "/var/www/sensor/photos";
 
 my $cgi = CGI->new;
 print $cgi->header('text/plain');
 if ('POST' eq $cgi->request_method && $cgi->param('action')) {
-    if (&checkSensorProcess eq "down") {
-        print "down";
-        exit 0;
-    }
+    my $status = &checkSensorProcess();
     if ($cgi->param('action') eq "arm") {
-        &writePipe("arm");
-        print &checkSensorStatus();
+        if ($status eq "down") {
+            print $status;
+        }
+        else {
+            &writePipe("arm");
+            print &checkSensorStatus();
+        }
     }
     elsif ($cgi->param('action') eq "disarm") {
-        &writePipe("disarm");
-        print &checkSensorStatus();
+        if ($status eq "down") {
+            print $status;
+        }
+        else {
+            &writePipe("disarm");
+            print &checkSensorStatus();
+        }
     }
     elsif ($cgi->param('action') eq "status") {
-        &writePipe("status");
-        print &checkSensorStatus();
+        if ($status eq "down") {
+            print $status;
+        }
+        else {
+            &writePipe("status");
+            print &checkSensorStatus();
+        }
+    }
+    elsif ($cgi->param('action') eq "getLatestPhoto") {
+        print &getLatestPhoto();
     }
 }
 else {
@@ -61,3 +77,10 @@ sub checkSensorStatus() {
         return "ERROR: sensor status is unknown";
     }
 }
+
+sub getLatestPhoto() {
+    my $latestPhoto = `/bin/ls -ltr /var/www/sensor/photos | awk '{print \$9}' | tail -1`;
+    chomp $latestPhoto;
+    return $latestPhoto;
+}
+
