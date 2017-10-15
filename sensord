@@ -6,8 +6,13 @@ $|++;
 use Device::BCM2835;
 use Net::SMTPS;
 use DateTime;
+use Getopt::Std;
 use Fcntl;
 use POSIX qw(mkfifo);
+
+use vars qw($opt_t $opt_h);
+getopts("th");
+exit &printUsage if $opt_h;
 
 my $AUTH_FILE = "/home/embroede/sensor/authFile";
 my $CGI_TO_SENSORD_PIPE = "/tmp/cgi_to_sensord.pipe";
@@ -67,6 +72,7 @@ sub cleanupIO() {
 }
 
 sub handleMotion() {
+    return if $opt_t;
     my $time = DateTime->now(time_zone => "America/Los_Angeles");
     &printLog("Taking photo");
     `/usr/bin/raspistill -o /var/www/sensor/photos/$time -rot 270 -q 100 -t 2000`;
@@ -167,7 +173,7 @@ sub readPipe() {
 
 sub writePipe() {
     my $msg = shift;
-    system("echo $msg > $SENSORD_TO_CGI_PIPE &"); # Not ideal; works for now
+    system("/bin/echo $msg > $SENSORD_TO_CGI_PIPE &"); # Not ideal; works for now
     return;
 }
 
@@ -196,5 +202,17 @@ sub handleTermSignal() {
     &printLog("Caught TERM signal, terminating program");
     &cleanupIO();
     exit 0;
+}
+
+sub printUsage() {
+    print <<EOF
+Usage: sensord [OPTION]...
+Monitors an area for motion, and sends a notification with
+a link to picture and video if motion is detected.
+
+  -t    Test mode (dry run with no notification)
+  -h    Display this help and exit
+
+EOF
 }
 
