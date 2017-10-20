@@ -1,5 +1,7 @@
 #!/usr/bin/perl
 
+my $LOGFILE = "/home/embroede/sensor/log/Check_Network.log";
+
 my @output = `pgrep Check_Network`;
 if (scalar @output > 1) {
     print "Check_Network is already running, exiting...\n" if $ARGV[0] eq "-d";
@@ -17,6 +19,9 @@ foreach my $interface (@interfaces) {
 }
 if (!$connected) {
     print "No network connection, restarting networking service\n" if $ARGV[0] eq "-d";
+    open(FH, ">", $LOGFILE) or die "Couldn't open $LOGFILE: $!\n";
+    print FH "No IPv4 address, restarting network with /etc/init.d/networking restart\n";
+    close(FH) or die "Couldn't close $LOGFILE\n";
     `/etc/init.d/networking restart`
 }
 
