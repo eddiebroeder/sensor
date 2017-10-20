@@ -67,7 +67,7 @@ sub initializeIO() {
 }
 
 sub cleanupIO() {
-    #TODO: cleanup gpio pins
+    #TODO: figure out how to cleanup gpio pins
     close ($CGI_TO_SENSORD_FH) or &printLog("Couldn't close pipe $CGI_TO_SENSORD_PIPE");
 }
 
