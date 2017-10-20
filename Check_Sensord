@@ -1,0 +1,18 @@
+#!/usr/bin/perl
+
+my $LOGFILE = "/home/embroede/sensor/log/Check_Sensord.log";
+
+my @output = `pgrep Check_Sensord`;
+if (scalar @output > 1) {
+    print "Check_Sensord is already running, exiting...\n" if $ARGV[0] eq "-d";
+    exit 0;
+}
+
+my $running = `pgrep sensord`;
+if (!$running) {
+    print "sensord not running, restarting sensord\n" if $ARGV[0] eq "-d";
+    open(FH, ">", $LOGFILE) or die "Couldn't open $LOGFILE: $!\n";
+    print FH "sensord not running, restarting sensord\n";
+    close(FH) or die "Couldn't close $LOGFILE\n";
+    system("/home/embroede/sensor/startMonitor&");
+}
