@@ -33,23 +33,19 @@ my $motionCount = 0;
 while (1)
 {
     my $action = &readPipe();
-    if ($action eq "arm") {
-        &armSensor();
-    }
-    elsif ($action eq "disarm") {
-        &disarmSensor();
-    }
-    elsif ($action eq "status") {
-        &writeStatus();
-    }
+    &handleCommand($action);
     if ($armed) {
         my $motion = Device::BCM2835::gpio_lev(&Device::BCM2835::RPI_GPIO_P1_08);
         ($motion) ? $motionCount++ : ($motionCount = 0);
         if ($motionCount > $MOTION_THRESHOLD) {
             &printLog("MOTION DETECTED!");
             &handleMotion();
-            &printLog("sleeping 20 seconds");
-            sleep 20;
+            &printLog("sleeping 15 seconds");
+            for (my $i = 0; $i < 3; $i++) {
+                $action = &readPipe();
+                &handleCommand($action);
+                sleep 5;
+            }
         }
         select(undef, undef, undef, 0.20);
     }
@@ -79,6 +75,19 @@ sub handleMotion() {
     &sendEmail($time) or &printLog("Couldn't send email");
     &printLog("recording video");
     `/home/embroede/sensor/record20SecondClip $time`;
+}
+
+sub handleCommand() {
+    my $action = shift;
+    if ($action eq "arm") {
+        &armSensor();
+    }
+    elsif ($action eq "disarm") {
+        &disarmSensor();
+    }
+    elsif ($action eq "status") {
+        &writeStatus();
+    }
 }
 
 sub sendEmail() {
