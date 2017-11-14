@@ -22,4 +22,6 @@
 # m h  dom mon dow   command
 
 # Run every 5 minutes, restart network if necessary
-*/5 * * * * /home/embroede/checks/Check_Network
+*/5 * * * * /home/embroede/sensor/Check_Network
+# Run every 5 minutes, restart sensord if necessary
+*/5 * * * * /home/embroede/sensor/Check_Sensord
