@@ -70,7 +70,7 @@ sub handleMotion() {
     return if $opt_t;
     my $time = DateTime->now(time_zone => "America/Los_Angeles");
     &printLog("Taking photo");
-    `/usr/bin/raspistill -o /var/www/sensor/photos/$time -rot 270 -q 100 -t 2000`;
+    `/usr/bin/raspistill -o /var/www/sensor/photos/$time -rot 270 -q 100 -t 1000`;
     &sendEmail($time) or &printLog("Couldn't send email");
     &printLog("recording video");
     `/home/embroede/sensor/record20SecondClip $time`;
@@ -97,7 +97,7 @@ sub sendEmail() {
         Port        => 587,
         Timeout     => 10,
         doSSL       => "starttls",
-        SSL_version => "TLSv1",
+        SSL_version => "TLSv1"
     ) or &printLog("couldn't create smtp object");
     $smtp->starttls();
     $smtp->auth($credentials{user}, $credentials{pass});
