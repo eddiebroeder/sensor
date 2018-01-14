@@ -41,6 +41,15 @@ if ('POST' eq $cgi->request_method && $cgi->param('action')) {
             print &checkSensorStatus();
         }
     }
+    elsif ($cgi->param('action') eq "armIn60") {
+        if ($status eq "down") {
+            print $status;
+        }
+        else {
+            &writePipe("armIn60");
+            print &checkSensorStatus();
+        }
+    }
     elsif ($cgi->param('action') eq "getLatestPhoto") {
         print &getLatestPhoto();
     }
@@ -70,7 +79,7 @@ sub checkSensorStatus() {
     my $return = sysread ($FIFO, $output, 12); 
     close ($FIFO) or die "Couldn't close pipe $SENSORD_TO_CGI_PIPE";
     #FIXME: Probably should check return, incase of EAGAIN, etc.
-    if ($output =~ "armed") {
+    if ($output =~ "arm") {
         return $output;
     }
     else {
