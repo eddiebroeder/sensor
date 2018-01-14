@@ -18,6 +18,7 @@ my $AUTH_FILE = "/home/embroede/sensor/authFile";
 my $CGI_TO_SENSORD_PIPE = "/tmp/cgi_to_sensord.pipe";
 my $SENSORD_TO_CGI_PIPE = "/tmp/sensord_to_cgi.pipe";
 my $PHOTOS_PATH = "/var/www/sensor/photos/";
+my $QUERY_INTERVAL = 5;
 my $MOTION_THRESHOLD = 3;
 my $CGI_TO_SENSORD_FH;
 
@@ -45,13 +46,13 @@ while (1) {
             for (my $i = 0; $i < 3; $i++) {
                 $action = &readPipe();
                 &handleCommand($action);
-                sleep 5;
+                sleep $QUERY_INTERVAL;
             }
         }
         select(undef, undef, undef, 0.20);
     }
     else {
-        sleep 5;
+        sleep $QUERY_INTERVAL;
     }
 }
 
@@ -82,7 +83,7 @@ sub handleMotion() {
 }
 
 sub handleCommand() {
-    my $action = shift;
+    my ($action) = @_;
     if ($action eq "arm") {
         &armSensor();
     }
@@ -92,10 +93,13 @@ sub handleCommand() {
     elsif ($action eq "status") {
         &writeStatus();
     }
+    elsif ($action eq "armIn60") {
+        &delayedArm(60);
+    }
 }
 
 sub sendEmail() {
-    my $time = shift;
+    my ($time) = @_;
     &printLog("Sending email and text message");
     my $smtp = Net::SMTP->new(
         Host        => "smtp.mail.yahoo.com",
@@ -120,7 +124,7 @@ sub sendEmail() {
 }
 
 sub getCredentials() {
-    my $authFile = shift;
+    my ($authFile) = @_;
     my %credentials;
     open (my $FH, "<", $authFile) or &printLogAndExit("Couldn't open authFile, $!");
     while (<$FH>) {
@@ -157,6 +161,23 @@ sub disarmSensor() {
     else {
         &printLog("Received disarm signal (already disarmed)");
     }
+}
+
+sub delayedArm() {
+    my ($delay) = @_;
+    &printLog("Arming sensor in $delay seconds");
+    if ($delay < $QUERY_INTERVAL) {
+        &printLog("Arm delay of $delay is too short");
+        &armSensor();
+    }
+    &writePipe("arming in $delay");
+    for (my $i = 0; $i < ($delay / $QUERY_INTERVAL); $i++) {
+        my $action = &readPipe();
+        &handleCommand($action) unless $action =~ /armIn/;
+        return if ($action eq "arm" || $action eq "disarm");
+        sleep $QUERY_INTERVAL;
+    }
+    &armSensor();
 }
 
 sub writeStatus() {
@@ -207,24 +228,24 @@ sub getCameraPID() {
 
 sub readPipe() {
     my $output;
-    my $return = sysread ($CGI_TO_SENSORD_FH, $output, 6); #TODO: CHECK RETURN
+    my $return = sysread ($CGI_TO_SENSORD_FH, $output, 8); #TODO: CHECK RETURN
     return $output;
 }
 
 sub writePipe() {
-    my $msg = shift;
+    my ($msg) = @_;
     system("/bin/echo $msg > $SENSORD_TO_CGI_PIPE &"); # Not ideal; works for now
     return;
 }
 
 sub printLog() {
-    my $msg = shift;
+    my ($msg) = @_;
     my $time = DateTime->now(time_zone => "America/Los_Angeles");
     print "$time $msg\n";
 }
 
 sub printLogAndExit() {
-    my $msg = shift;
+    my ($msg) = @_;
     &printLog($msg);
     &printLog("Terminating program");
     exit -1;
