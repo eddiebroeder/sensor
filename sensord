@@ -75,7 +75,7 @@ sub handleMotion() {
     kill ("USR1", &getCameraPID());
     &sendEmail($time) or &printLog("Couldn't send email");
     &stopCamera();
-    my $status = rename ($PHOTOS_PATH . &getLatestPhoto(), "$PHOTOS_PATH/$time");
+    rename ($PHOTOS_PATH . &getLatestPhoto(), "$PHOTOS_PATH/$time");
     &printLog("recording video");
     `/home/embroede/sensor/record20SecondClip $time`;
     &startCamera();
