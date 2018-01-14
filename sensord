@@ -17,11 +17,13 @@ exit &printUsage if $opt_h;
 my $AUTH_FILE = "/home/embroede/sensor/authFile";
 my $CGI_TO_SENSORD_PIPE = "/tmp/cgi_to_sensord.pipe";
 my $SENSORD_TO_CGI_PIPE = "/tmp/sensord_to_cgi.pipe";
+my $PHOTOS_PATH = "/var/www/sensor/photos/";
 my $MOTION_THRESHOLD = 3;
 my $CGI_TO_SENSORD_FH;
 
 &exitIfRunning();
 &ensurePipesExist();
+&startCamera();
 &initializeIO();
 $SIG{TERM} = \&handleTermSignal;
 
@@ -70,10 +72,13 @@ sub handleMotion() {
     return if $opt_t;
     my $time = DateTime->now(time_zone => "America/Los_Angeles");
     &printLog("Taking photo");
-    `/usr/bin/raspistill -o /var/www/sensor/photos/$time -rot 270 -q 100 -t 1000`;
+    kill ("USR1", &getCameraPID());
     &sendEmail($time) or &printLog("Couldn't send email");
+    &stopCamera();
+    my $status = rename ($PHOTOS_PATH . &getLatestPhoto(), "$PHOTOS_PATH/$time");
     &printLog("recording video");
     `/home/embroede/sensor/record20SecondClip $time`;
+    &startCamera();
 }
 
 sub handleCommand() {
@@ -132,6 +137,7 @@ sub getCredentials() {
 }
 
 sub armSensor() {
+    &startCamera() unless &getCameraPID();
     &writePipe("armed");
     if ($armed) {
         &printLog("Received arm signal (already armed)");
@@ -171,6 +177,32 @@ sub ensurePipesExist() {
         &printLogAndExit("Couldn't create PIPE $CGI_TO_SENSORD_PIPE, $!") unless $return;
         chmod (0666, $CGI_TO_SENSORD_PIPE);
     }
+}
+
+sub getLatestPhoto() {
+    my $latest = `/bin/ls -ltr /var/www/sensor/photos | awk '{print \$9}' | tail -1`;
+    chomp $latest;
+    return $latest;
+}
+
+sub startCamera() {
+    &printLog("Starting camera process");
+    if (&getCameraPID()) {
+        &printLog("Camera already running...");
+        return;
+    }
+    system("/usr/bin/raspistill -o /var/www/sensor/photos/pic%04d -rot 270 -q 100 -t 0 --signal &");
+}
+
+sub stopCamera() {
+    &printLog("Stopping camera process");
+    system("/usr/bin/pkill -f /usr/bin/raspistill");
+}
+
+sub getCameraPID() {
+    my $pid = `/usr/bin/pgrep -f /usr/bin/raspistill`;
+    chomp $pid;
+    return $pid;
 }
 
 sub readPipe() {
