@@ -18,7 +18,7 @@ my $AUTH_FILE = "/home/embroede/sensor/authFile";
 my $CGI_TO_SENSORD_PIPE = "/tmp/cgi_to_sensord.pipe";
 my $SENSORD_TO_CGI_PIPE = "/tmp/sensord_to_cgi.pipe";
 my $PHOTOS_PATH = "/var/www/sensor/photos/";
-my $QUERY_INTERVAL = 5;
+my $QUERY_INTERVAL = 3;
 my $MOTION_THRESHOLD = 3;
 my $CGI_TO_SENSORD_FH;
 
@@ -43,7 +43,7 @@ while (1) {
             &printLog("MOTION DETECTED!");
             &handleMotion();
             &printLog("sleeping 15 seconds");
-            for (my $i = 0; $i < 3; $i++) {
+            for (my $i = 0; $i < (15 / $QUERY_INTERVAL); $i++) {
                 $action = &readPipe();
                 &handleCommand($action);
                 sleep $QUERY_INTERVAL;
@@ -115,6 +115,7 @@ sub sendEmail() {
     $smtp->to($credentials{toNumber});
     $smtp->data();
     $smtp->datasend("\nMotion Detected!\n");
+    $smtp->datasend($credentials{domain} . "\n");
     $smtp->datasend("Links to current photo/video:\n");
     $smtp->datasend($credentials{domain} . "/photos/$time\n");
     $smtp->datasend($credentials{domain} . "/videos/$time.mp4");
