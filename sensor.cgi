@@ -15,40 +15,16 @@ print $cgi->header('text/plain');
 if ('POST' eq $cgi->request_method && $cgi->param('action')) {
     my $status = &checkSensorProcess();
     if ($cgi->param('action') eq "arm") {
-        if ($status eq "down") {
-            print $status;
-        }
-        else {
-            &writePipe("arm");
-            print &checkSensorStatus();
-        }
+        &handleInput("arm", $status);
     }
     elsif ($cgi->param('action') eq "disarm") {
-        if ($status eq "down") {
-            print $status;
-        }
-        else {
-            &writePipe("disarm");
-            print &checkSensorStatus();
-        }
+        &handleInput("disarm", $status);
     }
     elsif ($cgi->param('action') eq "status") {
-        if ($status eq "down") {
-            print $status;
-        }
-        else {
-            &writePipe("status");
-            print &checkSensorStatus();
-        }
+        &handleInput("status", $status);
     }
     elsif ($cgi->param('action') eq "armIn60") {
-        if ($status eq "down") {
-            print $status;
-        }
-        else {
-            &writePipe("armIn60");
-            print &checkSensorStatus();
-        }
+        &handleInput("armIn60", $status);
     }
     elsif ($cgi->param('action') eq "getLatestPhoto") {
         print &getLatestPhoto();
@@ -59,6 +35,17 @@ else {
 }
 
 #---<subroutines>--------------------------------------------------------------
+
+sub handleInput() {
+    my ($action, $status) = @_;
+    if ($status eq "down") {
+        print $status;
+    }
+    else {
+        &writePipe($action);
+        print &checkSensorStatus();
+    }
+}
 
 sub writePipe() {
     my $msg = shift;
