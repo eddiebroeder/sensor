@@ -1,5 +1,5 @@
 # sensor
-This is a tool to monitor a motion sensor and record a picture and video if the sensor is triggered.
+This is a to monitor a motion sensor attached to a Raspberry Pi and record a picture and video if the sensor is triggered, using the Raspberry Pi Camera Module.
 
 The pictures and videos are hosted using apache.
 
