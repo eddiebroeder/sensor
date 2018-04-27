@@ -10,7 +10,7 @@ if (scalar @output > 1) {
 
 my $connected = 0;
 my @interfaces = `/sbin/ifconfig`;
-my @interfaces = grep(/inet addr/, @interfaces);
+@interfaces = grep(/inet addr/, @interfaces);
 chomp @interfaces;
 foreach my $interface (@interfaces) {
     next if $interface =~ /127\.0\.0\.1/;
